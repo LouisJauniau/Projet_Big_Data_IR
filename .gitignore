@@ -4,3 +4,6 @@ venv/
 
 # Roadmap
 ROADMAP.md
+
+# Environment variables
+.env
