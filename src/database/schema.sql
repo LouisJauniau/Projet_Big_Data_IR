@@ -3,14 +3,14 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Passages table
 CREATE TABLE IF NOT EXISTS passages (
-    id SERIAL PRIMARY KEY,
+    id BIGINT PRIMARY KEY,
     text TEXT NOT NULL,
     title TEXT
 );
 
 -- Queries table
 CREATE TABLE IF NOT EXISTS queries (
-    id SERIAL PRIMARY KEY,
+    id BIGINT PRIMARY KEY,
     text TEXT NOT NULL
 );
 
