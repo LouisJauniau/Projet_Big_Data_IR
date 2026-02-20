@@ -1,30 +1,14 @@
-import logging
 import os
 import psycopg2
 from psycopg2 import Error
 from psycopg2.extensions import connection
+from utils.config import load_env_config
+from utils.logger import get_logger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-
-def load_env_config():
-    config = {
-        'host': os.getenv('DB_HOST', 'localhost'),
-        'port': os.getenv('DB_PORT', '5432'),
-        'database': os.getenv('DB_NAME', 'msmarco_db'),
-        'user': os.getenv('DB_USER', 'postgres'),
-        'password': os.getenv('DB_PASSWORD', 'postgres'),
-    }
-    
-    logger.info(f"Database configuration loaded: {config}")
-    return config
-
-def get_connection(config: dict):
+def get_connection(config: dict) -> connection:
+    config = load_env_config()
     try:
         conn = psycopg2.connect(
             host=config['host'],
@@ -112,6 +96,7 @@ def close_connection(conn: connection):
         raise
     
 if __name__ == "__main__":
+    # Initialize the database
     conn = init_db()
     close_connection(conn)
     logger.info("Database initialization process completed.")
