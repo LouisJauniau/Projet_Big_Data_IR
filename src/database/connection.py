@@ -2,12 +2,12 @@ import os
 import psycopg2
 from psycopg2 import Error
 from psycopg2.extensions import connection
-from utils.config import load_env_config
-from utils.logger import get_logger
+from .utils.config import load_env_config
+from .utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-def get_connection(config: dict) -> connection:
+def get_connection() -> connection:
     config = load_env_config()
     try:
         conn = psycopg2.connect(
@@ -65,7 +65,7 @@ def init_db() -> connection:
         temp_conn.close()
 
     # Get connection
-    conn = get_connection(config)
+    conn = get_connection()
     cursor = conn.cursor()
 
     try:

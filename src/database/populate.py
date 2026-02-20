@@ -1,8 +1,8 @@
 from datasets import load_dataset
-from connection import get_connection
+from .connection import get_connection
 from psycopg2.extras import execute_values
-from utils.config import load_env_config
-from utils.logger import get_logger
+from .utils.config import load_env_config
+from .utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -48,7 +48,7 @@ def populate_db():
 
     # Connect to the database
     config = load_env_config()
-    conn = get_connection(config)
+    conn = get_connection()
     cursor = conn.cursor()
     
     try:
@@ -104,7 +104,7 @@ def populate_db():
             if batch_index % commit_every_batches == 0 or is_last_batch:
                 conn.commit()
                 inserted_so_far = min(start + batch_size, total_qrels)
-                print(f"Inserted qrels: {inserted_so_far}/{total_qrels}")
+                logger.info(f"Inserted {inserted_so_far}/{total_qrels} qrels into the database...")
 
         logger.info(f"Inserted {total_qrels} qrels into the database.")
         logger.info("Database population completed successfully.")
