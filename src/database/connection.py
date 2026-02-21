@@ -1,9 +1,8 @@
 import os
 import psycopg2
-from psycopg2 import Error
 from psycopg2.extensions import connection
-from .utils.config import load_env_config
-from .utils.logger import get_logger
+from src.utils.config import load_env_config
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -78,7 +77,7 @@ def init_db() -> connection:
         cursor.execute(schema_sql)
         conn.commit()
         logger.info("Database initialized successfully.")
-    except Error as e:
+    except psycopg2.Error as e:
         conn.rollback()
         logger.error(f"{e}")
         raise
@@ -91,12 +90,12 @@ def close_connection(conn: connection):
     try:
         conn.close()
         logger.info("Database connection closed successfully.")
-    except Error as e:
+    except psycopg2.Error as e:
         logger.error(f"Error closing the database connection: {e}")
         raise
-    
+
+
 if __name__ == "__main__":
-    # Initialize the database
-    conn = init_db()
-    close_connection(conn)
+    connection_instance = init_db()
+    close_connection(connection_instance)
     logger.info("Database initialization process completed.")

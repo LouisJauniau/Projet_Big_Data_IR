@@ -1,8 +1,8 @@
 from datasets import load_dataset
-from .connection import get_connection
 from psycopg2.extras import execute_values
-from .utils.config import load_env_config
-from .utils.logger import get_logger
+from src.database.connection import get_connection
+from src.utils.config import load_env_config
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -116,6 +116,6 @@ def populate_db():
         cursor.close()
         conn.close()
 
+
 if __name__ == "__main__":
-    # Populate the database with the dataset
     populate_db()
