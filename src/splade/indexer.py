@@ -30,6 +30,8 @@ def index_passages(batch_size: int = 64, encoding_batch: int = 32):
 
     conn = get_connection()
     cursor = conn.cursor()
+    if cursor is None:
+        raise RuntimeError("")
 
     # Count total passages to process (exclude already indexed ones)
     cursor.execute(
@@ -39,7 +41,8 @@ def index_passages(batch_size: int = 64, encoding_batch: int = 32):
         WHERE NOT EXISTS (SELECT 1 FROM splade s WHERE s.passage_id = p.id)
         """
     )
-    total = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    total = row[0] if row is not None else 0
     logger.info(f"Passages to index: {total}")
 
     if total == 0:

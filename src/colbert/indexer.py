@@ -10,7 +10,6 @@ Usage
 import argparse
 import time
 
-import numpy as np
 from psycopg2.extras import execute_values
 
 from src.colbert.encoder import ColBERTEncoder
@@ -65,7 +64,8 @@ def index_passages(batch_size: int = 64):
         WHERE NOT EXISTS (SELECT 1 FROM colbert c WHERE c.passage_id = p.id)
         """
     )
-    total = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    total = row[0] if row is not None else 0
     logger.info(f"Passages to index: {total}")
 
     if total == 0:

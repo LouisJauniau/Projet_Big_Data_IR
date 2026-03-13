@@ -46,7 +46,8 @@ def search_query(query, top_k=5):
         """,
         (query, latency_ms)
     )
-    log_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    log_id = row[0] if row is not None else 0
 
     execute_values(
         cursor,

@@ -1,4 +1,3 @@
-import numpy as np
 from psycopg2.extras import execute_values
 from src.database.connection import get_connection
 from src.dpr.encode import get_model
