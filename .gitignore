@@ -10,3 +10,6 @@ ROADMAP.md
 
 # Pycache
 __pycache__/
+
+# Precomputed indexes CSV files
+splade_data.csv
