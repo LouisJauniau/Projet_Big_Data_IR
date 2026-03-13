@@ -11,5 +11,5 @@ ROADMAP.md
 # Pycache
 __pycache__/
 
-# Precomputed indexes CSV files
+# SPLADE sparse vectors export
 splade_data.csv
