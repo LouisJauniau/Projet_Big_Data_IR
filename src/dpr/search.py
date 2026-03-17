@@ -6,14 +6,14 @@ from src.dpr.encode import get_model
 
 def search_query(query, top_k=5):
     model = get_model()
-    
-    
+
+    # Encode the text query into a dense vector compatible with pgvector.
     query_embedding = model.encode([query], convert_to_numpy=True)[0].tolist()
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    
+    # Measure SQL retrieval latency only.
     t0 = time.time()
     cursor.execute(
         """
@@ -30,14 +30,14 @@ def search_query(query, top_k=5):
     results = cursor.fetchall()
     latency_ms = (time.time() - t0) * 1000
 
-    print(f"Requête : '{query}'")
-    print(f"Latence : {latency_ms:.1f} ms\n")
-    print(f"--- TOP {top_k} RÉSULTATS ---")
+    print(f"Query: '{query}'")
+    print(f"Latency: {latency_ms:.1f} ms\n")
+    print(f"--- TOP {top_k} RESULTS ---")
     for i, (pid, text, score) in enumerate(results, 1):
         print(f"\n#{i} (passage_id={pid}, score={score:.4f})")
         print(text)
 
-    
+    # Persist search metadata and ranked results for later analysis.
     cursor.execute(
         """
         INSERT INTO search_logs (timestamp, algorithm, query, latency_ms)
@@ -58,14 +58,14 @@ def search_query(query, top_k=5):
     cursor.close()
     conn.close()
 
-    print(f"\nRecherche loggée (search_log_id={log_id})")
+    print(f"\nSearch logged (search_log_id={log_id})")
 
 def evaluate_mrr(eval_queries=100, eval_top_k=10):
     model = get_model()
     conn = get_connection()
     cursor = conn.cursor()
 
-    
+    # Evaluate only queries that have at least one relevant passage and an indexed DPR vector.
     cursor.execute(
         """
         SELECT DISTINCT q.id, q.text
@@ -77,15 +77,15 @@ def evaluate_mrr(eval_queries=100, eval_top_k=10):
         (eval_queries,)
     )
     eval_queries_data = cursor.fetchall()
-    print(f"\nQueries pour évaluation : {len(eval_queries_data)}")
+    print(f"\nQueries for evaluation: {len(eval_queries_data)}")
 
     if len(eval_queries_data) == 0:
-        print("Aucune query trouvée pour l'évaluation.")
+        print("No query found for evaluation.")
         cursor.close()
         conn.close()
         return
 
-    
+    # Build a relevance lookup: query_id -> set of relevant passage_ids.
     query_ids = [q[0] for q in eval_queries_data]
     cursor.execute(
         """
@@ -99,7 +99,7 @@ def evaluate_mrr(eval_queries=100, eval_top_k=10):
     for qid, pid in cursor.fetchall():
         relevant.setdefault(qid, set()).add(pid)
 
-    
+    # Compute reciprocal rank for each query, then average.
     rr_scores = []
     for qid, qtext in eval_queries_data:
         qemb = model.encode([qtext], convert_to_numpy=True)[0].tolist()
@@ -124,12 +124,12 @@ def evaluate_mrr(eval_queries=100, eval_top_k=10):
     conn.close()
 
     mrr = np.mean(rr_scores)
-    print(f"MRR@{eval_top_k} sur {len(eval_queries_data)} queries : {mrr:.4f}")
+    print(f"MRR@{eval_top_k} on {len(eval_queries_data)} queries: {mrr:.4f}")
 
 if __name__ == "__main__":
-    
-    print("--- TEST DE RECHERCHE ---")
+
+    print("--- SEARCH TEST ---")
     search_query("Where is Paris?", top_k=5)
-    
-    print("\n--- ÉVALUATION MRR@10 ---")
+
+    print("\n--- MRR@10 EVALUATION ---")
     evaluate_mrr(eval_queries=100, eval_top_k=10)
