@@ -4,13 +4,18 @@ from psycopg2.extras import execute_values
 from src.database.connection import get_connection
 from src.dpr.encode import get_model
 
-def search_query(query, top_k=5):
-    model = get_model()
+
+def search(query, top_k=5, conn=None, model=None, log_search=True):
+    """Return the top-k DPR results for *query* as a list of dictionaries."""
+    own_conn = conn is None
+    if own_conn:
+        conn = get_connection()
+
+    model = model or get_model()
 
     # Encode the text query into a dense vector compatible with pgvector.
     query_embedding = model.encode([query], convert_to_numpy=True)[0].tolist()
 
-    conn = get_connection()
     cursor = conn.cursor()
 
     # Measure SQL retrieval latency only.
@@ -25,40 +30,54 @@ def search_query(query, top_k=5):
         ORDER BY d.embedding <=> %s::vector
         LIMIT %s
         """,
-        (query_embedding, query_embedding, top_k)
+        (query_embedding, query_embedding, top_k),
     )
-    results = cursor.fetchall()
+    fetched = cursor.fetchall()
     latency_ms = (time.time() - t0) * 1000
 
-    print(f"Query: '{query}'")
-    print(f"Latency: {latency_ms:.1f} ms\n")
-    print(f"--- TOP {top_k} RESULTS ---")
-    for i, (pid, text, score) in enumerate(results, 1):
-        print(f"\n#{i} (passage_id={pid}, score={score:.4f})")
-        print(text)
+    results = [
+        {"passage_id": pid, "text": text, "score": round(float(score), 4)}
+        for pid, text, score in fetched
+    ]
 
-    # Persist search metadata and ranked results for later analysis.
-    cursor.execute(
-        """
-        INSERT INTO search_logs (timestamp, algorithm, query, latency_ms)
-        VALUES (NOW(), 'DPR', %s, %s)
-        RETURNING id
-        """,
-        (query, latency_ms)
-    )
-    row = cursor.fetchone()
-    log_id = row[0] if row is not None else 0
+    if log_search:
+        cursor.execute(
+            """
+            INSERT INTO search_logs (timestamp, algorithm, query, latency_ms)
+            VALUES (NOW(), 'DPR', %s, %s)
+            RETURNING id
+            """,
+            (query, latency_ms),
+        )
+        row = cursor.fetchone()
+        log_id = row[0] if row is not None else 0
 
-    execute_values(
-        cursor,
-        "INSERT INTO results (search_log_id, algorithm, passage_id, rank, score) VALUES %s",
-        [(log_id, 'DPR', r[0], i + 1, float(r[2])) for i, r in enumerate(results)]
-    )
-    conn.commit()
+        execute_values(
+            cursor,
+            "INSERT INTO results (search_log_id, algorithm, passage_id, rank, score) VALUES %s",
+            [(log_id, 'DPR', r["passage_id"], i + 1, float(r["score"])) for i, r in enumerate(results)],
+        )
+        conn.commit()
+
     cursor.close()
-    conn.close()
 
-    print(f"\nSearch logged (search_log_id={log_id})")
+    if own_conn:
+        conn.close()
+
+    return results
+
+
+def search_query(query, top_k=5):
+    results = search(query, top_k=top_k, log_search=True)
+
+    print(f"Query: '{query}'")
+    print(f"--- TOP {top_k} RESULTS ---")
+    for i, result in enumerate(results, 1):
+        print(f"\n#{i} (passage_id={result['passage_id']}, score={result['score']:.4f})")
+        print(result['text'])
+
+    print("\nSearch logged")
+    return results
 
 def evaluate_mrr(eval_queries=100, eval_top_k=10):
     model = get_model()

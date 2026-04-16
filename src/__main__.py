@@ -9,7 +9,7 @@ def main():
     )
     parser.add_argument(
         "command",
-        choices=["init-db", "populate-db", "all"],
+        choices=["init-db", "populate-db", "all", "gui"],
         nargs="?",
         default="all",
         help="Action to run. Default: all",
@@ -23,6 +23,11 @@ def main():
 
     if args.command in ("populate-db", "all"):
         populate_db()
+
+    if args.command == "gui":
+        from src.search_gui import launch_app
+
+        launch_app()
 
     return 0
 
