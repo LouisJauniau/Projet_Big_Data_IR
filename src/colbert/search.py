@@ -16,6 +16,7 @@ Usage
 """
 
 import argparse
+import heapq
 import time
 
 import numpy as np
@@ -82,6 +83,7 @@ def _parse_pg_vector_array(raw) -> torch.Tensor:
 def search_bruteforce(
     query: str,
     top_k: int = 10,
+    max_passages: int | None = None,
     conn=None,
     encoder: ColBERTEncoder | None = None,
     log_search: bool = True,
@@ -98,39 +100,83 @@ def search_bruteforce(
     q_embs = enc.encode_query(query)
     encode_ms = (time.time() - t0) * 1000
 
-    # 2. Fetch all indexed passage embeddings
-    t1 = time.time()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT c.passage_id, c.embedding, p.text
-        FROM colbert c
-        JOIN passages p ON p.id = c.passage_id
-        """
-    )
-    retrieval_ms = 0
-    scoring_ms_total = 0
+    # 2. Stream embeddings with a server-side cursor and keep only top-k scores.
+    stream_cursor = conn.cursor(name="colbert_stream")
+    stream_cursor.itersize = 256
+    if max_passages is None:
+        stream_cursor.execute(
+            """
+            SELECT c.passage_id, c.embedding
+            FROM colbert c
+            ORDER BY c.passage_id
+            """
+        )
+    else:
+        stream_cursor.execute(
+            """
+            SELECT c.passage_id, c.embedding
+            FROM colbert c
+            ORDER BY c.passage_id
+            LIMIT %s
+            """,
+            (int(max_passages),),
+        )
 
-    scored = []
-    for passage_id, raw_embedding, passage_text in cursor:
+    retrieval_ms = 0.0
+    scoring_ms_total = 0.0
+    scored_count = 0
+    top_heap: list[tuple[float, int]] = []  # (score, passage_id)
+
+    for passage_id, raw_embedding in stream_cursor:
         t_r = time.time()
         d_embs = _parse_pg_vector_array(raw_embedding).to(enc.device)
         retrieval_ms += (time.time() - t_r) * 1000
 
         t_s = time.time()
-        score = maxsim_score(q_embs, d_embs)
+        score = float(maxsim_score(q_embs, d_embs))
         scoring_ms_total += (time.time() - t_s) * 1000
 
-        scored.append(
-            {"passage_id": passage_id, "score": round(score, 4), "text": passage_text}
-        )
+        scored_count += 1
+        item = (score, int(passage_id))
+        if len(top_heap) < top_k:
+            heapq.heappush(top_heap, item)
+        elif score > top_heap[0][0]:
+            heapq.heapreplace(top_heap, item)
 
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    results = scored[:top_k]
+        del d_embs
+
+    stream_cursor.close()
+
+    ranked = sorted(top_heap, key=lambda x: x[0], reverse=True)
+    top_ids = [pid for _, pid in ranked]
+
+    results: list[dict] = []
+    if top_ids:
+        text_cursor = conn.cursor()
+        text_cursor.execute(
+            """
+            SELECT id, text
+            FROM passages
+            WHERE id = ANY(%s)
+            """,
+            (top_ids,),
+        )
+        texts_by_id = {int(pid): txt for pid, txt in text_cursor.fetchall()}
+        text_cursor.close()
+
+        for score, pid in ranked:
+            results.append(
+                {
+                    "passage_id": pid,
+                    "score": round(score, 4),
+                    "text": texts_by_id.get(pid, ""),
+                }
+            )
+
     total_ms = (time.time() - t0) * 1000
 
     logger.info(
-        f"ColBERT brute-force: scored {len(scored)} passages, "
+        f"ColBERT brute-force: scored {scored_count} passages, "
         f"top-{top_k} returned (encode={encode_ms:.0f}ms, "
         f"retrieval={retrieval_ms:.0f}ms, scoring={scoring_ms_total:.0f}ms, "
         f"total={total_ms:.0f}ms)"
@@ -140,7 +186,6 @@ def search_bruteforce(
     if log_search:
         _log_search(conn, query, "colbert", total_ms, results)
 
-    cursor.close()
     if own_conn:
         conn.close()
 
@@ -188,10 +233,21 @@ def main():
     parser = argparse.ArgumentParser(description="ColBERT dense retrieval search.")
     parser.add_argument("query", type=str, help="Search query text.")
     parser.add_argument("--top_k", type=int, default=10, help="Number of results (default: 10).")
+    parser.add_argument(
+        "--max_passages",
+        type=int,
+        default=None,
+        help="Optionally cap the number of passages scored (default: all).",
+    )
     parser.add_argument("--no-log", action="store_true", help="Don't log to search_logs table.")
     args = parser.parse_args()
 
-    results = search_bruteforce(args.query, top_k=args.top_k, log_search=not args.no_log)
+    results = search_bruteforce(
+        args.query,
+        top_k=args.top_k,
+        max_passages=args.max_passages,
+        log_search=not args.no_log,
+    )
 
     print(f"\n{'='*80}")
     print(f"Query: {args.query}")
