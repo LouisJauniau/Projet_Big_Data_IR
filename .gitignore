@@ -13,3 +13,9 @@ __pycache__/
 
 # SPLADE sparse vectors export
 splade_data.csv
+
+# DPR sparse vectors export
+dpr_data.csv
+
+# Colbert sparse vectors export
+colbert_data.csv
