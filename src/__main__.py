@@ -1,7 +1,7 @@
 import argparse
 from src.database.connection import close_connection, init_db
 from src.database.populate import populate_db
-
+from src.search_gui import launch_app
 
 def main():
     parser = argparse.ArgumentParser(
@@ -25,8 +25,6 @@ def main():
         populate_db()
 
     if args.command == "gui":
-        from src.search_gui import launch_app
-
         launch_app()
 
     return 0

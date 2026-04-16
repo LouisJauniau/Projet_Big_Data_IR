@@ -180,9 +180,5 @@ def launch_app():
     root.mainloop()
 
 
-def main():
-    launch_app()
-
-
 if __name__ == "__main__":
-    main()
+    launch_app()
