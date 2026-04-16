@@ -2,6 +2,10 @@
 .venv/
 venv/
 
+# Pyinstaller
+build/
+dist/
+
 # Roadmap
 ROADMAP.md
 
